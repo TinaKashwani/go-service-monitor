@@ -1,0 +1,22 @@
+# Compiled Go executables
+# server
+server.exe
+go-service-monitor
+go-service-monitor.exe
+
+# Go test binaries and coverage
+*.test
+*.out
+coverage.out
+
+# Environment variables
+.env
+
+# Logs
+*.log
+
+# IDE and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
