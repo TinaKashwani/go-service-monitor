@@ -3,6 +3,7 @@ package checker
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/TinaKashwani/go-service-monitor/internal/model"
@@ -62,4 +63,28 @@ func (c *Checker) Check(ctx context.Context, url string) model.CheckResult {
 	}
 
 	return result
+}
+
+// CheckServicesConcurrently checks multiple services at the same time.
+func (c *Checker) CheckServicesConcurrently(
+	ctx context.Context,
+	urls []string,
+) []model.CheckResult {
+	results := make([]model.CheckResult, len(urls))
+
+	var waitGroup sync.WaitGroup
+
+	for index, url := range urls {
+		waitGroup.Add(1)
+
+		go func(resultIndex int, serviceURL string) {
+			defer waitGroup.Done()
+
+			results[resultIndex] = c.Check(ctx, serviceURL)
+		}(index, url)
+	}
+
+	waitGroup.Wait()
+
+	return results
 }

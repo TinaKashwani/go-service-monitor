@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -134,5 +135,125 @@ func TestCheckReturnsDownWhenRequestTimesOut(t *testing.T) {
 	if !strings.Contains(strings.ToLower(result.Error), "timeout") &&
 		!strings.Contains(strings.ToLower(result.Error), "deadline exceeded") {
 		t.Errorf("expected timeout-related error, got %q", result.Error)
+	}
+}
+
+func TestCheckServicesConcurrentlyReturnsAllResults(t *testing.T) {
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
+	defer server.Close()
+
+	healthChecker := New(2 * time.Second)
+
+	urls := []string{
+		server.URL + "/service-one",
+		server.URL + "/service-two",
+		server.URL + "/service-three",
+	}
+
+	results := healthChecker.CheckServicesConcurrently(
+		context.Background(),
+		urls,
+	)
+
+	if len(results) != len(urls) {
+		t.Fatalf(
+			"expected %d results, got %d",
+			len(urls),
+			len(results),
+		)
+	}
+
+	for index, result := range results {
+		if result.URL != urls[index] {
+			t.Errorf(
+				"expected URL %q at index %d, got %q",
+				urls[index],
+				index,
+				result.URL,
+			)
+		}
+
+		if result.Status != "up" {
+			t.Errorf(
+				"expected %q to be up, got %q",
+				result.URL,
+				result.Status,
+			)
+		}
+
+		if result.StatusCode != http.StatusOK {
+			t.Errorf(
+				"expected status code %d, got %d",
+				http.StatusOK,
+				result.StatusCode,
+			)
+		}
+	}
+}
+
+func TestCheckServicesConcurrentlyRunsChecksInParallel(t *testing.T) {
+	var activeRequests int32
+	var maximumActiveRequests int32
+
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			active := atomic.AddInt32(&activeRequests, 1)
+
+			for {
+				currentMaximum := atomic.LoadInt32(
+					&maximumActiveRequests,
+				)
+
+				if active <= currentMaximum {
+					break
+				}
+
+				if atomic.CompareAndSwapInt32(
+					&maximumActiveRequests,
+					currentMaximum,
+					active,
+				) {
+					break
+				}
+			}
+
+			time.Sleep(100 * time.Millisecond)
+
+			atomic.AddInt32(&activeRequests, -1)
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
+	defer server.Close()
+
+	healthChecker := New(2 * time.Second)
+
+	urls := []string{
+		server.URL + "/service-one",
+		server.URL + "/service-two",
+		server.URL + "/service-three",
+	}
+
+	results := healthChecker.CheckServicesConcurrently(
+		context.Background(),
+		urls,
+	)
+
+	if len(results) != len(urls) {
+		t.Fatalf(
+			"expected %d results, got %d",
+			len(urls),
+			len(results),
+		)
+	}
+
+	if atomic.LoadInt32(&maximumActiveRequests) < 2 {
+		t.Errorf(
+			"expected requests to overlap, but maximum active requests was %d",
+			maximumActiveRequests,
+		)
 	}
 }
