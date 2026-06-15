@@ -5,6 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/TinaKashwani/go-service-monitor/internal/checker"
 )
 
 type HealthResponse struct {
@@ -12,9 +15,12 @@ type HealthResponse struct {
 	Message string `json:"message"`
 }
 
+var serviceChecker = checker.New(5 * time.Second)
+
 func main() {
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/health", healthHandler)
+	http.HandleFunc("/check", checkHandler)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -51,6 +57,27 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Unable to encode response", http.StatusInternalServerError)
+	}
+}
+
+func checkHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	url := r.URL.Query().Get("url")
+	if url == "" {
+		http.Error(w, "Missing required query parameter: url", http.StatusBadRequest)
+		return
+	}
+
+	result := serviceChecker.Check(r.Context(), url)
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
 		http.Error(w, "Unable to encode response", http.StatusInternalServerError)
 	}
 }
