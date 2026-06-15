@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/TinaKashwani/go-service-monitor/internal/checker"
+	"github.com/TinaKashwani/go-service-monitor/internal/handler"
+	"github.com/TinaKashwani/go-service-monitor/internal/model"
 )
 
 type HealthResponse struct {
@@ -17,10 +19,35 @@ type HealthResponse struct {
 
 var serviceChecker = checker.New(5 * time.Second)
 
+var monitoredServices = []model.Service{
+	{
+		Name: "Example",
+		URL:  "https://example.com",
+	},
+	{
+		Name: "Google",
+		URL:  "https://www.google.com",
+	},
+	{
+		Name: "Invalid service",
+		URL:  "http://invalid-service-that-does-not-exist.test",
+	},
+}
+
 func main() {
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/check", checkHandler)
+
+	monitorHandler := handler.NewMonitorHandler(
+		serviceChecker,
+		monitoredServices,
+	)
+
+	http.Handle(
+		"/api/v1/services/status",
+		monitorHandler,
+	)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -65,6 +92,7 @@ func checkHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
