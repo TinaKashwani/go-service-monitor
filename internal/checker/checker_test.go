@@ -257,3 +257,144 @@ func TestCheckServicesConcurrentlyRunsChecksInParallel(t *testing.T) {
 		)
 	}
 }
+
+func TestCheckServicesConcurrentlyHandlesEmptyURLList(t *testing.T) {
+	healthChecker := New(2 * time.Second)
+
+	results := healthChecker.CheckServicesConcurrently(
+		context.Background(),
+		nil,
+	)
+
+	if len(results) != 0 {
+		t.Errorf(
+			"expected 0 results, got %d",
+			len(results),
+		)
+	}
+}
+
+func TestCheckServicesConcurrentlyCollectsMixedResults(t *testing.T) {
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/healthy":
+				w.WriteHeader(http.StatusOK)
+			case "/unhealthy":
+				w.WriteHeader(http.StatusServiceUnavailable)
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}),
+	)
+	defer server.Close()
+
+	healthChecker := New(2 * time.Second)
+
+	urls := []string{
+		server.URL + "/healthy",
+		server.URL + "/unhealthy",
+	}
+
+	results := healthChecker.CheckServicesConcurrently(
+		context.Background(),
+		urls,
+	)
+
+	if len(results) != len(urls) {
+		t.Fatalf(
+			"expected %d results, got %d",
+			len(urls),
+			len(results),
+		)
+	}
+
+	healthyResult := results[0]
+
+	if healthyResult.URL != urls[0] {
+		t.Errorf(
+			"expected URL %q, got %q",
+			urls[0],
+			healthyResult.URL,
+		)
+	}
+
+	if healthyResult.Status != "up" {
+		t.Errorf(
+			"expected healthy service to be up, got %q",
+			healthyResult.Status,
+		)
+	}
+
+	if healthyResult.StatusCode != http.StatusOK {
+		t.Errorf(
+			"expected status code %d, got %d",
+			http.StatusOK,
+			healthyResult.StatusCode,
+		)
+	}
+
+	unhealthyResult := results[1]
+
+	if unhealthyResult.URL != urls[1] {
+		t.Errorf(
+			"expected URL %q, got %q",
+			urls[1],
+			unhealthyResult.URL,
+		)
+	}
+
+	if unhealthyResult.Status != "down" {
+		t.Errorf(
+			"expected unhealthy service to be down, got %q",
+			unhealthyResult.Status,
+		)
+	}
+
+	if unhealthyResult.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf(
+			"expected status code %d, got %d",
+			http.StatusServiceUnavailable,
+			unhealthyResult.StatusCode,
+		)
+	}
+}
+
+func TestCheckServicesConcurrentlyCollectsRequestErrors(t *testing.T) {
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	)
+
+	workingURL := server.URL
+	server.Close()
+
+	healthChecker := New(500 * time.Millisecond)
+
+	urls := []string{
+		workingURL,
+	}
+
+	results := healthChecker.CheckServicesConcurrently(
+		context.Background(),
+		urls,
+	)
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	result := results[0]
+
+	if result.Status != "down" {
+		t.Errorf(
+			"expected closed server to be down, got %q",
+			result.Status,
+		)
+	}
+
+	if result.Error == "" {
+		t.Error("expected a request error")
+	}
+}

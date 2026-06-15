@@ -16,6 +16,12 @@ type Checker struct {
 	client *http.Client
 }
 
+// indexedResult associates a health-check result with its original URL position.
+type indexedResult struct {
+	index  int
+	result model.CheckResult
+}
+
 // New creates a Checker with a configured HTTP timeout.
 func New(timeout time.Duration) *Checker {
 	if timeout <= 0 {
@@ -65,12 +71,15 @@ func (c *Checker) Check(ctx context.Context, url string) model.CheckResult {
 	return result
 }
 
-// CheckServicesConcurrently checks multiple services at the same time.
+// CheckServicesConcurrently checks multiple services at the same time
+// and collects their results through a channel.
 func (c *Checker) CheckServicesConcurrently(
 	ctx context.Context,
 	urls []string,
 ) []model.CheckResult {
 	results := make([]model.CheckResult, len(urls))
+
+	resultChannel := make(chan indexedResult, len(urls))
 
 	var waitGroup sync.WaitGroup
 
@@ -80,11 +89,23 @@ func (c *Checker) CheckServicesConcurrently(
 		go func(resultIndex int, serviceURL string) {
 			defer waitGroup.Done()
 
-			results[resultIndex] = c.Check(ctx, serviceURL)
+			resultChannel <- indexedResult{
+				index:  resultIndex,
+				result: c.Check(ctx, serviceURL),
+			}
 		}(index, url)
 	}
 
-	waitGroup.Wait()
+	// Close the channel only after every health-check goroutine finishes.
+	go func() {
+		waitGroup.Wait()
+		close(resultChannel)
+	}()
+
+	// Receive results until the channel has been closed and emptied.
+	for completedResult := range resultChannel {
+		results[completedResult.index] = completedResult.result
+	}
 
 	return results
 }
