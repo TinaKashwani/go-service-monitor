@@ -161,3 +161,45 @@ func TestMonitorHandlerRejectsUnsupportedMethod(t *testing.T) {
 		)
 	}
 }
+
+func TestMonitorHandlerReturnsEmptyResultsWhenNoServicesConfigured(
+	t *testing.T,
+) {
+	serviceChecker := checker.New(time.Second)
+
+	monitorHandler := NewMonitorHandler(
+		serviceChecker,
+		nil,
+	)
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/services/status",
+		nil,
+	)
+
+	response := httptest.NewRecorder()
+
+	monitorHandler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf(
+			"expected status code %d, got %d",
+			http.StatusOK,
+			response.Code,
+		)
+	}
+
+	var results []model.CheckResult
+
+	if err := json.NewDecoder(response.Body).Decode(&results); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+
+	if len(results) != 0 {
+		t.Errorf(
+			"expected no results, got %d",
+			len(results),
+		)
+	}
+}
