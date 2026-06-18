@@ -21,7 +21,12 @@ import { ServiceStatusService } from './services/service-status.service';
           </p>
         </div>
 
-        <button type="button" class="refresh-button" (click)="refresh()">
+        <button
+          type="button"
+          class="refresh-button"
+          data-testid="refresh-button"
+          (click)="refresh()"
+        >
           Refresh
         </button>
       </section>
@@ -41,26 +46,43 @@ import { ServiceStatusService } from './services/service-status.service';
         </div>
       </section>
 
-      <section *ngIf="loading()" class="state-card state-card--loading">
+      <section
+        *ngIf="loading()"
+        class="state-card state-card--loading"
+        data-testid="loading-state"
+      >
         <h2>Checking services</h2>
         <p>Fetching the latest monitoring results from the backend API.</p>
       </section>
 
-      <section *ngIf="!loading() && errorMessage()" class="state-card state-card--error">
+      <section
+        *ngIf="!loading() && errorMessage()"
+        class="state-card state-card--error"
+        data-testid="error-state"
+      >
         <h2>Unable to load service data</h2>
         <p>{{ errorMessage() }}</p>
       </section>
 
-      <section *ngIf="!loading() && !errorMessage() && statuses().length === 0" class="state-card">
+      <section
+        *ngIf="!loading() && !errorMessage() && statuses().length === 0"
+        class="state-card"
+        data-testid="empty-state"
+      >
         <h2>No services configured</h2>
         <p>The backend returned an empty result set.</p>
       </section>
 
-      <section *ngIf="!loading() && !errorMessage() && statuses().length > 0" class="results-grid">
+      <section
+        *ngIf="!loading() && !errorMessage() && statuses().length > 0"
+        class="results-grid"
+        data-testid="results-grid"
+      >
         <article
           *ngFor="let service of statuses(); trackBy: trackByUrl"
           class="result-card"
           [class.result-card--down]="service.status !== 'up'"
+          data-testid="result-card"
         >
           <header class="result-header">
             <div>
