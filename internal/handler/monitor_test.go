@@ -8,7 +8,10 @@ import (
 	"time"
 
 	"github.com/TinaKashwani/go-service-monitor/internal/checker"
+	"github.com/TinaKashwani/go-service-monitor/internal/metrics"
 	"github.com/TinaKashwani/go-service-monitor/internal/model"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func TestMonitorHandlerReturnsServiceResults(t *testing.T) {
@@ -200,6 +203,79 @@ func TestMonitorHandlerReturnsEmptyResultsWhenNoServicesConfigured(
 		t.Errorf(
 			"expected no results, got %d",
 			len(results),
+		)
+	}
+}
+
+func TestMonitorHandlerRecordsMetrics(t *testing.T) {
+	serviceServer := httptest.NewServer(
+		http.HandlerFunc(func(
+			writer http.ResponseWriter,
+			request *http.Request,
+		) {
+			writer.WriteHeader(http.StatusOK)
+		}),
+	)
+	defer serviceServer.Close()
+
+	services := []model.Service{
+		{
+			Name: "Test service",
+			URL:  serviceServer.URL,
+		},
+	}
+
+	registry := prometheus.NewRegistry()
+	monitorMetrics := metrics.NewMonitorMetrics(registry)
+
+	monitorHandler := NewMonitorHandlerWithMetrics(
+		checker.New(time.Second),
+		services,
+		monitorMetrics,
+	)
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/services/status",
+		nil,
+	)
+
+	response := httptest.NewRecorder()
+
+	monitorHandler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf(
+			"expected status code %d, got %d",
+			http.StatusOK,
+			response.Code,
+		)
+	}
+
+	checkCount := testutil.ToFloat64(
+		monitorMetrics.ChecksTotal.WithLabelValues(
+			"Test service",
+			"up",
+		),
+	)
+
+	if checkCount != 1 {
+		t.Errorf(
+			"expected check count 1, got %f",
+			checkCount,
+		)
+	}
+
+	upValue := testutil.ToFloat64(
+		monitorMetrics.ServiceUp.WithLabelValues(
+			"Test service",
+		),
+	)
+
+	if upValue != 1 {
+		t.Errorf(
+			"expected service_up value 1, got %f",
+			upValue,
 		)
 	}
 }

@@ -9,7 +9,10 @@ import (
 
 	"github.com/TinaKashwani/go-service-monitor/internal/checker"
 	"github.com/TinaKashwani/go-service-monitor/internal/handler"
+	"github.com/TinaKashwani/go-service-monitor/internal/metrics"
 	"github.com/TinaKashwani/go-service-monitor/internal/model"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type HealthResponse struct {
@@ -35,15 +38,20 @@ var monitoredServices = []model.Service{
 }
 
 func main() {
+	monitorMetrics := metrics.NewMonitorMetrics(
+		prometheus.DefaultRegisterer,
+	)
+
+	monitorHandler := handler.NewMonitorHandlerWithMetrics(
+		serviceChecker,
+		monitoredServices,
+		monitorMetrics,
+	)
+
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/check", checkHandler)
-
-	monitorHandler := handler.NewMonitorHandler(
-		serviceChecker,
-		monitoredServices,
-	)
-
+	http.Handle("/metrics", promhttp.Handler())
 	http.Handle(
 		"/api/v1/services/status",
 		monitorHandler,

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/TinaKashwani/go-service-monitor/internal/checker"
+	"github.com/TinaKashwani/go-service-monitor/internal/metrics"
 	"github.com/TinaKashwani/go-service-monitor/internal/model"
 )
 
@@ -12,6 +13,7 @@ import (
 type MonitorHandler struct {
 	checker  *checker.Checker
 	services []model.Service
+	metrics  *metrics.MonitorMetrics
 }
 
 // NewMonitorHandler creates a monitoring HTTP handler.
@@ -22,6 +24,18 @@ func NewMonitorHandler(
 	return &MonitorHandler{
 		checker:  serviceChecker,
 		services: services,
+	}
+}
+
+func NewMonitorHandlerWithMetrics(
+	serviceChecker *checker.Checker,
+	services []model.Service,
+	monitorMetrics *metrics.MonitorMetrics,
+) *MonitorHandler {
+	return &MonitorHandler{
+		checker:  serviceChecker,
+		services: services,
+		metrics:  monitorMetrics,
 	}
 }
 
@@ -50,6 +64,23 @@ func (h *MonitorHandler) ServeHTTP(
 		request.Context(),
 		urls,
 	)
+
+	if h.metrics != nil {
+		resultsByURL := make(map[string]model.CheckResult)
+
+		for _, result := range results {
+			resultsByURL[result.URL] = result
+		}
+
+		for _, service := range h.services {
+			result, exists := resultsByURL[service.URL]
+			if !exists {
+				continue
+			}
+
+			h.metrics.Record(service, result)
+		}
+	}
 
 	writer.Header().Set("Content-Type", "application/json")
 
