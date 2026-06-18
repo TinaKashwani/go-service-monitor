@@ -1,0 +1,43 @@
+:root {
+  color-scheme: light;
+  --page-bg: #f3efe5;
+  --panel-bg: rgba(255, 252, 247, 0.88);
+  --panel-border: rgba(44, 62, 80, 0.12);
+  --panel-shadow: 0 24px 60px rgba(31, 41, 55, 0.12);
+  --text-main: #1d2733;
+  --text-muted: #5d6977;
+  --accent: #0f766e;
+  --accent-strong: #115e59;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --success: #166534;
+  --success-soft: #ecfdf3;
+  --warning: #b45309;
+  --warning-soft: #fffbeb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "Aptos", "Segoe UI Variable", "Trebuchet MS", sans-serif;
+  color: var(--text-main);
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.18), transparent 34%),
+    radial-gradient(circle at top right, rgba(180, 83, 9, 0.16), transparent 28%),
+    linear-gradient(180deg, #fbf8f2 0%, var(--page-bg) 100%);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
