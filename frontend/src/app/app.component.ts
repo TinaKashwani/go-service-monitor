@@ -34,15 +34,15 @@ import { ServiceStatusService } from './services/service-status.service';
       <section class="summary-panel">
         <div class="summary-item">
           <span class="summary-label">Services checked</span>
-          <strong>{{ statuses().length }}</strong>
+          <strong data-testid="services-count">{{ statuses().length }}</strong>
         </div>
         <div class="summary-item">
           <span class="summary-label">Healthy</span>
-          <strong>{{ healthyCount() }}</strong>
+          <strong data-testid="healthy-count">{{ healthyCount() }}</strong>
         </div>
         <div class="summary-item">
           <span class="summary-label">Unhealthy</span>
-          <strong>{{ unhealthyCount() }}</strong>
+          <strong data-testid="unhealthy-count">{{ unhealthyCount() }}</strong>
         </div>
       </section>
 
