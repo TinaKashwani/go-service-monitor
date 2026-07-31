@@ -1,4 +1,5 @@
 export interface CheckResult {
+  name?: string;
   url: string;
   status: 'up' | 'down' | string;
   status_code: number;

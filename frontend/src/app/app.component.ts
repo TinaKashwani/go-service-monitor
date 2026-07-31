@@ -86,8 +86,9 @@ import { ServiceStatusService } from './services/service-status.service';
         >
           <header class="result-header">
             <div>
-              <p class="result-label">Service URL</p>
-              <h2>{{ service.url }}</h2>
+              <p class="result-label">Service</p>
+              <h2>{{ service.name || service.url }}</h2>
+              <p *ngIf="service.name" class="service-url">{{ service.url }}</p>
             </div>
 
             <span
@@ -308,6 +309,12 @@ import { ServiceStatusService } from './services/service-status.service';
       color: var(--danger);
       background: var(--danger-soft);
       font-size: 0.94rem;
+      overflow-wrap: anywhere;
+    }
+
+    .service-url {
+      margin: 0.35rem 0 0;
+      color: var(--text-muted);
       overflow-wrap: anywhere;
     }
 
