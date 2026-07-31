@@ -1,0 +1,16 @@
+meta {
+  name: Invalid ad hoc URL scheme — expect 400
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/check?url=ftp%3A%2F%2Fexample.com
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 400
+  res.body.error: eq url scheme must be http or https
+}
