@@ -59,3 +59,35 @@ server after changing the environment variable.
 
 The server applies read-header, read, write, and idle timeouts. `SIGINT` and
 `SIGTERM` trigger graceful shutdown with a bounded deadline.
+
+## Production frontend container
+
+The Angular frontend is built from `frontend/package-lock.json` in a pinned
+Node image, then served by unprivileged Nginx. Nginx serves the single-page
+application on port 8080 and forwards same-origin `/api/` requests to the
+backend selected with `BACKEND_URL`.
+
+Build and run the frontend:
+
+```bash
+docker build -t go-service-monitor-frontend ./frontend
+docker run --rm -p 8081:8080 \
+  -e BACKEND_URL=http://host.docker.internal:8080 \
+  go-service-monitor-frontend
+```
+
+On Windows PowerShell, use a backtick instead of `\` for line continuation.
+Then open `http://localhost:8081`.
+
+Verify the container:
+
+```bash
+curl http://localhost:8081/frontend-health
+curl http://localhost:8081/
+curl http://localhost:8081/a/nested/frontend/route
+curl http://localhost:8081/api/v1/services/status
+```
+
+The health endpoint returns `ok`, both frontend routes return the Angular
+application, and the API request is handled by the backend configured through
+`BACKEND_URL`.
