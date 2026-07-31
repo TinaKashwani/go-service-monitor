@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -53,9 +54,14 @@ func main() {
 		port = "8080"
 	}
 
+	services, err := loadMonitoredServices()
+	if err != nil {
+		log.Fatalf("Invalid MONITORED_SERVICES configuration: %v", err)
+	}
+
 	server := newHTTPServer(
 		":"+port,
-		newHandler(envEnabled("ENABLE_AD_HOC_CHECKS")),
+		newHandler(envEnabled("ENABLE_AD_HOC_CHECKS"), services),
 	)
 
 	listener, err := net.Listen("tcp", server.Addr)
@@ -77,11 +83,11 @@ func main() {
 	}
 }
 
-func newHandler(enableAdHocChecks bool) http.Handler {
+func newHandler(enableAdHocChecks bool, services []model.Service) http.Handler {
 	monitorMetrics := metrics.NewMonitorMetrics(prometheus.DefaultRegisterer)
 	monitorHandler := handler.NewMonitorHandlerWithMetrics(
 		serviceChecker,
-		monitoredServices,
+		services,
 		monitorMetrics,
 	)
 
@@ -93,6 +99,45 @@ func newHandler(enableAdHocChecks bool) http.Handler {
 	mux.Handle("/api/v1/services/status", monitorHandler)
 
 	return mux
+}
+
+func loadMonitoredServices() ([]model.Service, error) {
+	raw, configured := os.LookupEnv("MONITORED_SERVICES")
+	if !configured {
+		return append([]model.Service(nil), monitoredServices...), nil
+	}
+
+	var services []model.Service
+	if err := json.Unmarshal([]byte(raw), &services); err != nil {
+		return nil, fmt.Errorf("must be a JSON array: %w", err)
+	}
+	if services == nil {
+		return nil, errors.New("must be a JSON array, not null")
+	}
+
+	names := make(map[string]struct{}, len(services))
+	urls := make(map[string]struct{}, len(services))
+	for index, service := range services {
+		if strings.TrimSpace(service.Name) == "" {
+			return nil, fmt.Errorf("service %d must have a name", index+1)
+		}
+		if strings.TrimSpace(service.URL) == "" {
+			return nil, fmt.Errorf("service %d must have a URL", index+1)
+		}
+		if err := validateTargetURL(service.URL); err != nil {
+			return nil, fmt.Errorf("service %d URL: %w", index+1, err)
+		}
+		if _, exists := names[service.Name]; exists {
+			return nil, fmt.Errorf("duplicate service name %q", service.Name)
+		}
+		if _, exists := urls[service.URL]; exists {
+			return nil, fmt.Errorf("duplicate service URL %q", service.URL)
+		}
+		names[service.Name] = struct{}{}
+		urls[service.URL] = struct{}{}
+	}
+
+	return services, nil
 }
 
 func newHTTPServer(address string, requestHandler http.Handler) *http.Server {

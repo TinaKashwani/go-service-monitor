@@ -66,20 +66,13 @@ func (h *MonitorHandler) ServeHTTP(
 		urls,
 	)
 
+	for index := range results {
+		results[index].Name = h.services[index].Name
+	}
+
 	if h.metrics != nil {
-		resultsByURL := make(map[string]model.CheckResult)
-
-		for _, result := range results {
-			resultsByURL[result.URL] = result
-		}
-
-		for _, service := range h.services {
-			result, exists := resultsByURL[service.URL]
-			if !exists {
-				continue
-			}
-
-			h.metrics.Record(service, result)
+		for index, service := range h.services {
+			h.metrics.Record(service, results[index])
 		}
 	}
 

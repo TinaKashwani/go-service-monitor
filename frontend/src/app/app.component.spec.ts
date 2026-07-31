@@ -68,6 +68,7 @@ describe('AppComponent', () => {
     const checkedAt = '2026-01-15T12:30:00Z';
     const results: CheckResult[] = [
       {
+        name: 'Healthy API',
         url: 'https://healthy.example.com',
         status: 'up',
         status_code: 200,
@@ -97,6 +98,7 @@ describe('AppComponent', () => {
     expect(getByTestId('results-grid')).not.toBeNull();
     expect(resultCards.length).toBe(2);
     expect(getTextContent()).toContain('https://healthy.example.com');
+    expect(getTextContent()).toContain('Healthy API');
     expect(getTextContent()).toContain('https://offline.example.com');
     expect(getTextContent()).toContain('Up');
     expect(getTextContent()).toContain('Down');

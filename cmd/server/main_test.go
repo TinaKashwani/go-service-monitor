@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -174,5 +176,61 @@ func TestServeEnforcesShutdownDeadline(t *testing.T) {
 	close(release)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected shutdown deadline error, got %v", err)
+	}
+}
+
+func TestLoadMonitoredServices(t *testing.T) {
+	t.Run("uses defaults when unset", func(t *testing.T) {
+		t.Setenv("MONITORED_SERVICES", "temporary")
+		if err := os.Unsetenv("MONITORED_SERVICES"); err != nil {
+			t.Fatal(err)
+		}
+
+		services, err := loadMonitoredServices()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(services, monitoredServices) {
+			t.Fatalf("expected defaults, got %#v", services)
+		}
+	})
+
+	t.Run("preserves valid configured services and order", func(t *testing.T) {
+		t.Setenv("MONITORED_SERVICES", `[{"name":"Second","url":"https://second.example.com"},{"name":"First","url":"http://first.example.com/health"}]`)
+
+		services, err := loadMonitoredServices()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(services) != 2 || services[0].Name != "Second" || services[1].Name != "First" {
+			t.Fatalf("configuration order was not preserved: %#v", services)
+		}
+	})
+
+	t.Run("accepts an empty array", func(t *testing.T) {
+		t.Setenv("MONITORED_SERVICES", `[]`)
+		services, err := loadMonitoredServices()
+		if err != nil || len(services) != 0 {
+			t.Fatalf("expected empty services, got %#v, %v", services, err)
+		}
+	})
+
+	invalid := map[string]string{
+		"invalid JSON":       `{`,
+		"null":               `null`,
+		"missing name":       `[{"url":"https://example.com"}]`,
+		"empty URL":          `[{"name":"Example","url":""}]`,
+		"duplicate name":     `[{"name":"Same","url":"https://one.example.com"},{"name":"Same","url":"https://two.example.com"}]`,
+		"duplicate URL":      `[{"name":"One","url":"https://same.example.com"},{"name":"Two","url":"https://same.example.com"}]`,
+		"unsupported scheme": `[{"name":"FTP","url":"ftp://example.com"}]`,
+		"missing hostname":   `[{"name":"Broken","url":"http:///health"}]`,
+	}
+	for name, value := range invalid {
+		t.Run("rejects "+name, func(t *testing.T) {
+			t.Setenv("MONITORED_SERVICES", value)
+			if _, err := loadMonitoredServices(); err == nil {
+				t.Fatalf("expected %s to be rejected", name)
+			}
+		})
 	}
 }

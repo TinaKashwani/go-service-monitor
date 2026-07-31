@@ -91,3 +91,22 @@ curl http://localhost:8081/api/v1/services/status
 The health endpoint returns `ok`, both frontend routes return the Angular
 application, and the API request is handled by the backend configured through
 `BACKEND_URL`.
+
+## Configure monitored services
+
+Set `MONITORED_SERVICES` to a JSON array before startup to change the dashboard
+targets without rebuilding the application. Each entry requires a unique name
+and URL, and URLs must use HTTP or HTTPS. An empty array is valid. When the
+variable is unset, the built-in example services are used.
+
+```powershell
+$env:MONITORED_SERVICES = '[{"name":"Local backend","url":"http://localhost:8080/health"},{"name":"Unavailable","url":"http://127.0.0.1:59999"}]'
+go run ./cmd/server
+Invoke-RestMethod http://localhost:8080/api/v1/services/status
+```
+
+The server validates this value at startup and exits before listening if the
+JSON is malformed or contains missing fields, duplicate names or URLs, or a
+non-HTTP(S) URL. Results preserve the configured order and include `name`,
+`url`, `status`, `status_code`, `response_time`, `response_time_ms`,
+`checked_at`, and an optional `error`.
