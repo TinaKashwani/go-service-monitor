@@ -44,13 +44,14 @@ func (h *MonitorHandler) ServeHTTP(
 	writer http.ResponseWriter,
 	request *http.Request,
 ) {
+	writer.Header().Set("Content-Type", "application/json")
+
 	if request.Method != http.MethodGet {
 		writer.Header().Set("Allow", http.MethodGet)
-		http.Error(
-			writer,
-			http.StatusText(http.StatusMethodNotAllowed),
-			http.StatusMethodNotAllowed,
-		)
+		writer.WriteHeader(http.StatusMethodNotAllowed)
+		_ = json.NewEncoder(writer).Encode(map[string]string{
+			"error": http.StatusText(http.StatusMethodNotAllowed),
+		})
 		return
 	}
 
@@ -81,8 +82,6 @@ func (h *MonitorHandler) ServeHTTP(
 			h.metrics.Record(service, result)
 		}
 	}
-
-	writer.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(writer).Encode(results); err != nil {
 		http.Error(
