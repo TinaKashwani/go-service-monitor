@@ -31,6 +31,35 @@ Prometheus-compatible metrics.
 go run ./cmd/server
 ```
 
+The server listens on `PORT` (default `8080`). It exposes:
+
+- `GET /` for API information
+- `GET /health` for a lightweight process health check
+- `GET /api/v1/services/status` for configured service checks
+- `GET /metrics` for Prometheus metrics
+
+All public endpoints reject non-`GET` methods with `405 Method Not Allowed`.
+The health endpoint does not make outbound requests.
+
+## Ad hoc checks
+
+`GET /check` is disabled by default to prevent the public API from being used
+to make arbitrary outbound requests. Disabled requests return `404`.
+
+For trusted local environments only, enable it at startup:
+
+```powershell
+$env:ENABLE_AD_HOC_CHECKS = "true"
+go run ./cmd/server
+Invoke-RestMethod "http://localhost:8080/check?url=https://example.com"
+```
+
+Only absolute `http` and `https` URLs with a hostname are accepted. Restart the
+server after changing the environment variable.
+
+The server applies read-header, read, write, and idle timeouts. `SIGINT` and
+`SIGTERM` trigger graceful shutdown with a bounded deadline.
+
 ## Production frontend container
 
 The Angular frontend is built from `frontend/package-lock.json` in a pinned

@@ -1,0 +1,16 @@
+meta {
+  name: API information — expect 200
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.headers.content-type: contains application/json
+}
