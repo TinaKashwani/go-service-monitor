@@ -1,0 +1,15 @@
+node_modules
+dist
+coverage
+.angular
+
+Dockerfile*
+.dockerignore
+
+*.log
+*.tmp
+
+playwright-report
+test-results
+e2e
+
