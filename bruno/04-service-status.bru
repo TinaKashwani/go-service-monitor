@@ -1,0 +1,16 @@
+meta {
+  name: Monitored service status — expect 200
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/services/status
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.headers.content-type: contains application/json
+}

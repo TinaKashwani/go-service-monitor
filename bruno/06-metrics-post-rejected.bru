@@ -1,0 +1,17 @@
+meta {
+  name: POST metrics — expect 405
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/metrics
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 405
+  res.headers.allow: eq GET
+  res.body.error: eq Method Not Allowed
+}

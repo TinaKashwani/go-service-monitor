@@ -1,0 +1,16 @@
+meta {
+  name: Ad hoc check disabled — expect 404
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/check?url=https%3A%2F%2Fexample.com
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 404
+  res.body.error: eq Not Found
+}

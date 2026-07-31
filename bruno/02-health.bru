@@ -1,0 +1,17 @@
+meta {
+  name: Health — expect 200
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/health
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.headers.content-type: contains application/json
+  res.body.status: eq healthy
+}
