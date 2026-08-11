@@ -20,6 +20,10 @@ type MonitorRepository interface {
 	Delete(context.Context, string) error
 }
 
+type ScheduledMonitorRepository interface {
+	Due(context.Context, int) ([]model.Monitor, error)
+}
+
 type PostgresMonitors struct{ pool *pgxpool.Pool }
 
 func NewPostgresMonitors(pool *pgxpool.Pool) *PostgresMonitors { return &PostgresMonitors{pool: pool} }
@@ -72,6 +76,47 @@ func (r *PostgresMonitors) Delete(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return err
+}
+
+// Due atomically claims due monitors using PostgreSQL advisory locks held by
+// the returned transaction. Callers should prefer ClaimDue for scheduling.
+func (r *PostgresMonitors) ClaimDue(ctx context.Context, limit int) (*pgxpool.Conn, []model.Monitor, error) {
+	conn, err := r.pool.Acquire(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, err := conn.Query(ctx, `SELECT `+monitorColumns+` FROM monitors m
+		WHERE enabled AND NOT EXISTS (
+			SELECT 1 FROM check_results c WHERE c.monitor_id=m.id
+			AND c.source='scheduled' AND c.checked_at > now()-(m.interval_seconds * interval '1 second')
+		) AND pg_try_advisory_lock(hashtextextended(m.id::text, 0))
+		ORDER BY COALESCE((SELECT max(c.checked_at) FROM check_results c WHERE c.monitor_id=m.id), m.created_at)
+		LIMIT $1`, limit)
+	if err != nil {
+		conn.Release()
+		return nil, nil, err
+	}
+	defer rows.Close()
+	items := []model.Monitor{}
+	for rows.Next() {
+		m, scanErr := scanMonitor(rows)
+		if scanErr != nil {
+			conn.Release()
+			return nil, nil, scanErr
+		}
+		items = append(items, m)
+	}
+	if err := rows.Err(); err != nil {
+		conn.Release()
+		return nil, nil, err
+	}
+	return conn, items, nil
+}
+func (r *PostgresMonitors) ReleaseClaims(ctx context.Context, conn *pgxpool.Conn, items []model.Monitor) {
+	for _, m := range items {
+		_, _ = conn.Exec(ctx, `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, m.ID)
+	}
+	conn.Release()
 }
 
 type PostgresChecks struct{ pool *pgxpool.Pool }

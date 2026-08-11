@@ -21,6 +21,7 @@ import (
 	"github.com/TinaKashwani/go-service-monitor/internal/metrics"
 	"github.com/TinaKashwani/go-service-monitor/internal/model"
 	"github.com/TinaKashwani/go-service-monitor/internal/repository"
+	"github.com/TinaKashwani/go-service-monitor/internal/scheduler"
 	"github.com/TinaKashwani/go-service-monitor/internal/security"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
@@ -94,6 +95,11 @@ func main() {
 		syscall.SIGTERM,
 	)
 	defer stop()
+	if pool != nil {
+		validator := security.NewURLValidator()
+		backgroundScheduler := scheduler.New(repository.NewPostgresMonitors(pool), repository.NewPostgresChecks(pool), security.NewSafeChecker(validator, 10), 10, 5*time.Second, log.Default())
+		go backgroundScheduler.Run(ctx)
+	}
 
 	log.Printf("Server starting on port %s", port)
 
