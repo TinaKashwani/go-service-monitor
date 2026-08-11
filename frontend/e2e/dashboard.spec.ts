@@ -31,6 +31,7 @@ test.describe('service monitor dashboard', () => {
     await mockStatusResponses(page, [
       [
         {
+          name: 'Healthy API',
           url: 'https://healthy.example.com',
           status: 'up',
           status_code: 200,
@@ -55,6 +56,7 @@ test.describe('service monitor dashboard', () => {
     await expect(page.getByTestId('results-grid')).toBeVisible();
     await expect(page.getByTestId('result-card')).toHaveCount(2);
     await expect(page.getByText('https://healthy.example.com')).toBeVisible();
+    await expect(page.getByText('Healthy API')).toBeVisible();
     await expect(page.getByText('https://offline.example.com')).toBeVisible();
     await expect(page.getByText('Up')).toBeVisible();
     await expect(page.getByText('Down')).toBeVisible();

@@ -92,6 +92,10 @@ func TestMonitorHandlerReturnsServiceResults(t *testing.T) {
 			len(results),
 		)
 	}
+	if results[0].Name != services[0].Name || results[0].URL != services[0].URL ||
+		results[1].Name != services[1].Name || results[1].URL != services[1].URL {
+		t.Fatalf("expected ordered name/result association, got %#v", results)
+	}
 
 	resultsByURL := make(map[string]model.CheckResult)
 

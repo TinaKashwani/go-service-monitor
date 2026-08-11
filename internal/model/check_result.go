@@ -4,6 +4,7 @@ import "time"
 
 // CheckResult represents the result of checking one external service.
 type CheckResult struct {
+	Name           string        `json:"name"`
 	URL            string        `json:"url"`
 	Status         string        `json:"status"`
 	StatusCode     int           `json:"status_code"`
