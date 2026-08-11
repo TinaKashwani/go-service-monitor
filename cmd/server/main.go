@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/TinaKashwani/go-service-monitor/internal/checker"
+	"github.com/TinaKashwani/go-service-monitor/internal/database"
 	"github.com/TinaKashwani/go-service-monitor/internal/handler"
 	"github.com/TinaKashwani/go-service-monitor/internal/metrics"
 	"github.com/TinaKashwani/go-service-monitor/internal/model"
@@ -57,6 +58,21 @@ func main() {
 	services, err := loadMonitoredServices()
 	if err != nil {
 		log.Fatalf("Invalid MONITORED_SERVICES configuration: %v", err)
+	}
+
+	databaseURL := os.Getenv("DATABASE_URL")
+	var closeDatabase func()
+	if databaseURL != "" {
+		pool, databaseErr := database.Open(context.Background(), databaseURL, 10*time.Second)
+		if databaseErr != nil {
+			log.Fatalf("Database startup failed: %v", databaseErr)
+		}
+		if databaseErr = database.Migrate(context.Background(), pool); databaseErr != nil {
+			pool.Close()
+			log.Fatalf("Database migration failed: %v", databaseErr)
+		}
+		closeDatabase = pool.Close
+		defer closeDatabase()
 	}
 
 	server := newHTTPServer(
