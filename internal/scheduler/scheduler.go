@@ -81,3 +81,22 @@ func (s *Scheduler) runDue(ctx context.Context) {
 	close(jobs)
 	wg.Wait()
 }
+
+func RunRetention(ctx context.Context, checks *repository.PostgresChecks, retention time.Duration, logger *log.Logger) {
+	cleanup := func() {
+		if _, err := checks.DeleteOlderThan(ctx, time.Now().UTC().Add(-retention)); err != nil && ctx.Err() == nil {
+			logger.Printf("retention cleanup: %v", err)
+		}
+	}
+	cleanup()
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cleanup()
+		}
+	}
+}

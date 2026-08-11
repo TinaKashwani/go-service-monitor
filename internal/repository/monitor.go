@@ -124,8 +124,35 @@ type PostgresChecks struct{ pool *pgxpool.Pool }
 func NewPostgresChecks(pool *pgxpool.Pool) *PostgresChecks { return &PostgresChecks{pool: pool} }
 func (r *PostgresChecks) Create(ctx context.Context, c model.StoredCheck) (model.StoredCheck, error) {
 	c.CheckedAt = c.CheckedAt.UTC()
-	err := r.pool.QueryRow(ctx, `INSERT INTO check_results(monitor_id,status,status_code,latency_ms,error_category,error_message,source,checked_at) VALUES($1,$2,$3,$4,NULLIF($5,''),NULLIF($6,''),$7,$8) RETURNING id`, c.MonitorID, c.Status, c.StatusCode, c.LatencyMS, c.ErrorCategory, c.ErrorMessage, c.Source, c.CheckedAt).Scan(&c.ID)
-	return c, err
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return c, err
+	}
+	defer tx.Rollback(ctx)
+	err = tx.QueryRow(ctx, `INSERT INTO check_results(monitor_id,status,status_code,latency_ms,error_category,error_message,source,checked_at) VALUES($1,$2,$3,$4,NULLIF($5,''),NULLIF($6,''),$7,$8) RETURNING id`, c.MonitorID, c.Status, c.StatusCode, c.LatencyMS, c.ErrorCategory, c.ErrorMessage, c.Source, c.CheckedAt).Scan(&c.ID)
+	if err != nil {
+		return c, err
+	}
+	if c.Source == "scheduled" {
+		if err = updateIncident(ctx, tx, c); err != nil {
+			return c, err
+		}
+	}
+	return c, tx.Commit(ctx)
+}
+
+func updateIncident(ctx context.Context, tx pgx.Tx, c model.StoredCheck) error {
+	if c.Status == "up" {
+		_, err := tx.Exec(ctx, `UPDATE incidents SET state='resolved',resolved_at=$2,duration_seconds=EXTRACT(EPOCH FROM ($2-opened_at))::bigint,updated_at=now() WHERE monitor_id=$1 AND state='active'`, c.MonitorID, c.CheckedAt)
+		return err
+	}
+	var failures int
+	err := tx.QueryRow(ctx, `SELECT count(*) FROM (SELECT status FROM check_results WHERE monitor_id=$1 AND source='scheduled' ORDER BY checked_at DESC LIMIT 2) recent WHERE status='down'`, c.MonitorID).Scan(&failures)
+	if err != nil || failures < 2 {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO incidents(monitor_id,state,cause,first_failure_at,last_failure_at,opened_at) VALUES($1,'active',COALESCE(NULLIF($2,''),'unknown'),(SELECT min(checked_at) FROM (SELECT checked_at FROM check_results WHERE monitor_id=$1 AND source='scheduled' AND status='down' ORDER BY checked_at DESC LIMIT 2) f),$3,$3) ON CONFLICT (monitor_id) WHERE state='active' DO UPDATE SET last_failure_at=EXCLUDED.last_failure_at,cause=EXCLUDED.cause,updated_at=now()`, c.MonitorID, c.ErrorCategory, c.CheckedAt)
+	return err
 }
 func (r *PostgresChecks) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
 	tag, err := r.pool.Exec(ctx, `DELETE FROM check_results WHERE checked_at < $1`, cutoff.UTC())

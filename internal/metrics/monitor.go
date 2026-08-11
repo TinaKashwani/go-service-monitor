@@ -9,6 +9,8 @@ import (
 type MonitorMetrics struct {
 	ChecksTotal *prometheus.CounterVec
 	ServiceUp   *prometheus.GaugeVec
+	Latency     *prometheus.HistogramVec
+	Incidents   prometheus.Counter
 }
 
 // NewMonitorMetrics creates and registers service-monitoring metrics.
@@ -36,11 +38,15 @@ func NewMonitorMetrics(
 			},
 			[]string{"service"},
 		),
+		Latency:   prometheus.NewHistogramVec(prometheus.HistogramOpts{Namespace: "service_monitor", Name: "check_latency_seconds", Help: "HTTP check latency in seconds.", Buckets: prometheus.DefBuckets}, []string{"service"}),
+		Incidents: prometheus.NewCounter(prometheus.CounterOpts{Namespace: "service_monitor", Name: "incidents_total", Help: "Total incidents opened."}),
 	}
 
 	registerer.MustRegister(
 		monitorMetrics.ChecksTotal,
 		monitorMetrics.ServiceUp,
+		monitorMetrics.Latency,
+		monitorMetrics.Incidents,
 	)
 
 	return monitorMetrics
@@ -65,4 +71,5 @@ func (m *MonitorMetrics) Record(
 	m.ServiceUp.WithLabelValues(
 		service.Name,
 	).Set(upValue)
+	m.Latency.WithLabelValues(service.Name).Observe(float64(result.ResponseTimeMS) / 1000)
 }

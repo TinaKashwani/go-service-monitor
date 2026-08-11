@@ -99,6 +99,7 @@ func main() {
 		validator := security.NewURLValidator()
 		backgroundScheduler := scheduler.New(repository.NewPostgresMonitors(pool), repository.NewPostgresChecks(pool), security.NewSafeChecker(validator, 10), 10, 5*time.Second, log.Default())
 		go backgroundScheduler.Run(ctx)
+		go scheduler.RunRetention(ctx, repository.NewPostgresChecks(pool), 30*24*time.Hour, log.Default())
 	}
 
 	log.Printf("Server starting on port %s", port)
@@ -128,8 +129,12 @@ func newHandlerWithDatabase(enableAdHocChecks bool, services []model.Service, po
 	mux.Handle("/api/v1/services/status", monitorHandler)
 	if pool != nil {
 		monitorAPI := handler.NewMonitorAPI(repository.NewPostgresMonitors(pool), repository.NewPostgresChecks(pool), security.NewURLValidator())
+		historyAPI := handler.NewHistoryAPI(repository.NewPostgresHistory(pool))
+		monitorAPI.SetHistory(historyAPI)
 		mux.Handle("/api/v1/monitors", monitorAPI)
 		mux.Handle("/api/v1/monitors/", monitorAPI)
+		mux.HandleFunc("/api/v1/overview", historyAPI.Overview)
+		mux.HandleFunc("/api/v1/incidents", historyAPI.Incidents)
 	}
 
 	return mux

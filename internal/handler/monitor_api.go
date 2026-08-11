@@ -17,7 +17,10 @@ type MonitorAPI struct {
 	checks    *repository.PostgresChecks
 	validator *security.URLValidator
 	checker   *security.SafeChecker
+	history   *HistoryAPI
 }
+
+func (h *MonitorAPI) SetHistory(history *HistoryAPI) { h.history = history }
 
 func NewMonitorAPI(monitors repository.MonitorRepository, checks *repository.PostgresChecks, validator *security.URLValidator) *MonitorAPI {
 	return &MonitorAPI{monitors: monitors, checks: checks, validator: validator, checker: security.NewSafeChecker(validator, 10)}
@@ -33,6 +36,10 @@ func (h *MonitorAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(path, "/")
 	if len(parts) == 2 && parts[1] == "check" {
 		h.check(w, r, parts[0])
+		return
+	}
+	if len(parts) == 2 && parts[1] == "history" && h.history != nil {
+		h.history.History(w, r)
 		return
 	}
 	if len(parts) == 1 {
