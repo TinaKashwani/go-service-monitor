@@ -8,7 +8,7 @@ export default defineConfig({
   retries: process.env['CI'] ? 2 : 0,
   reporter: 'html',
   use: {
-    baseURL: 'http://127.0.0.1:4200',
+    baseURL: 'http://127.0.0.1:4300',
     locale: 'en-US',
     timezoneId: 'UTC',
     trace: 'retain-on-failure',
@@ -26,8 +26,8 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: 'npm run start -- --host 127.0.0.1 --port 4200',
-    url: 'http://127.0.0.1:4200',
+    command: 'npm run start -- --host 127.0.0.1 --port 4300',
+    url: 'http://127.0.0.1:4300',
     reuseExistingServer: !process.env['CI'],
     timeout: 120000
   }
