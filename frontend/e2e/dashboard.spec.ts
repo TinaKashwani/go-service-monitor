@@ -1,14 +1,15 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
-type ServiceStatus = {
+interface ServiceStatus {
+  name?: string;
   url: string;
   status: 'up' | 'down';
-  status_code: number;
-  response_time: number;
-  response_time_ms: number;
-  checked_at: string;
+  status_code?: number | null;
+  response_time?: number | null;
+  response_time_ms?: number | null;
+  checked_at?: string;
   error?: string;
-};
+}
 
 const apiPath = '**/api/v1/services/status';
 
@@ -61,7 +62,7 @@ test.describe('service monitor dashboard', () => {
     await expect(page.getByText('91 ms')).toBeVisible();
     await expect(page.getByText('200')).toBeVisible();
     await expect(page.getByText('503')).toBeVisible();
-    await expect(page.getByText('Jan 15, 2026, 12:30:00 PM')).toHaveCount(2);
+    await expect(page.getByTestId('result-card').getByText('Jan 15, 2026, 12:30:00 PM')).toHaveCount(2);
     await expect(page.getByText('timeout')).toBeVisible();
     await expect(page.getByTestId('services-count')).toHaveText('2');
     await expect(page.getByTestId('healthy-count')).toHaveText('1');
@@ -109,7 +110,7 @@ test.describe('service monitor dashboard', () => {
     await page.goto('/');
 
     await expect(page.getByTestId('error-state')).toBeVisible();
-    await expect(page.getByText('The backend returned HTTP 500.')).toBeVisible();
+    await expect(page.getByTestId('error-state').getByText('The backend returned HTTP 500.')).toBeVisible();
   });
 
   test('refreshes the dashboard with updated controlled data', async ({ page }) => {
@@ -147,6 +148,47 @@ test.describe('service monitor dashboard', () => {
     await expect(page.getByText('97 ms')).toBeVisible();
     await expect(page.getByText('service unavailable')).toBeVisible();
     await expect(page.getByText('https://before-refresh.example.com')).not.toBeVisible();
+  });
+
+  test('locks refresh and retains results when a refresh fails', async ({ page }) => {
+    let requestCount = 0;
+    let releaseRefresh!: () => void;
+    const refreshReleased = new Promise<void>((resolve) => { releaseRefresh = resolve; });
+    await page.route(apiPath, async (route) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        await fulfillJson(route, [{ url: 'https://retained.example.com', status: 'up', status_code: 200, response_time_ms: 12, checked_at: '2026-01-15T12:30:00Z' }]);
+        return;
+      }
+      await refreshReleased;
+      await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+    });
+
+    await page.goto('/');
+    await expect(page.getByText('https://retained.example.com')).toBeVisible();
+    await page.getByTestId('refresh-button').click();
+    await expect(page.getByTestId('refresh-button')).toBeDisabled();
+    await expect(page.getByTestId('refreshing-state')).toBeVisible();
+    await page.getByTestId('refresh-button').click({ force: true });
+    expect(requestCount).toBe(2);
+    releaseRefresh();
+
+    await expect(page.getByTestId('refresh-error')).toBeVisible();
+    await expect(page.getByText('https://retained.example.com')).toBeVisible();
+    await expect(page.getByText(/previous results are still shown/i)).toBeVisible();
+  });
+
+  test('shows accessible status text, missing metrics, and the newest refresh time', async ({ page }) => {
+    await mockStatusResponses(page, [[
+      { name: 'Unavailable API', url: 'https://missing.example.com', status: 'down', checked_at: '2026-01-15T12:45:00Z' }
+    ]]);
+    await page.goto('/');
+
+    await expect(page.getByRole('button', { name: 'Refresh service statuses' })).toBeVisible();
+    await expect(page.getByText('Status: Down')).toBeVisible();
+    await expect(page.getByText('N/A')).toHaveCount(2);
+    await expect(page.getByTestId('last-refreshed')).toContainText('Jan 15, 2026, 12:45:00 PM');
+    await expect(page.getByTestId('live-status')).toHaveAttribute('aria-live', 'polite');
   });
 
   test('keeps the dashboard usable on mobile layouts', async ({ page, isMobile }) => {

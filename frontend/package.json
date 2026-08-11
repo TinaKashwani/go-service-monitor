@@ -5,6 +5,7 @@
   "scripts": {
     "start": "ng serve --proxy-config proxy.conf.json",
     "build": "ng build",
+    "lint": "ng lint --max-warnings=0",
     "watch": "ng build --watch --configuration development",
     "test": "ng test --watch=false",
     "test:e2e": "playwright test"
@@ -28,12 +29,15 @@
     "@angular/compiler-cli": "^18.2.0",
     "@playwright/test": "1.54.1",
     "@types/jasmine": "^5.1.4",
+    "angular-eslint": "^18.4.3",
+    "eslint": "^9.8.0",
     "jasmine-core": "^5.2.0",
     "karma": "^6.4.4",
     "karma-chrome-launcher": "^3.2.0",
     "karma-coverage": "^2.2.1",
     "karma-jasmine": "^5.1.0",
     "karma-jasmine-html-reporter": "^2.1.0",
-    "typescript": "~5.5.4"
+    "typescript": "~5.5.4",
+    "typescript-eslint": "^8.0.0"
   }
 }
