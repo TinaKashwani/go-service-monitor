@@ -1,5 +1,7 @@
 # Go Service Monitor
 
+[![CI](https://github.com/TinaKashwani/go-service-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/TinaKashwani/go-service-monitor/actions/workflows/ci.yml)
+
 A service health and latency monitoring API built with Go.
 
 The application will perform concurrent HTTP health checks, measure service
@@ -110,3 +112,36 @@ JSON is malformed or contains missing fields, duplicate names or URLs, or a
 non-HTTP(S) URL. Results preserve the configured order and include `name`,
 `url`, `status`, `status_code`, `response_time`, `response_time_ms`,
 `checked_at`, and an optional `error`.
+
+## Run the full stack with Docker Compose
+
+Build and start the backend and frontend, wait for both health checks, then
+open `http://localhost:4200`:
+
+```bash
+docker compose up --build --wait
+```
+
+The browser uses only the frontend origin. Nginx proxies `/api/` to the
+internal backend service. The default Compose configuration monitors one
+healthy internal target and one intentionally unavailable local target, so it
+does not depend on public internet services.
+
+```bash
+curl http://localhost:4200/frontend-health
+curl http://localhost:4200/api/v1/services/status
+docker compose ps
+docker compose logs
+docker compose down
+```
+
+## Continuous integration
+
+GitHub Actions runs on pull requests and pushes to `main`. Separate jobs check
+the Go backend (format, vet, tests, race detector, and build), Angular frontend
+(lint, headless unit tests, and production build), mocked Playwright tests on
+desktop and mobile Chromium, and both production containers through Compose.
+Failure-only artifacts retain Playwright diagnostics and Compose logs for seven
+days. The workflow uses no repository secrets and caches only Go modules/build
+data and npm's download cache; dependencies are still installed from the
+committed lockfiles on every run.

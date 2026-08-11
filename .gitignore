@@ -27,3 +27,4 @@ frontend/dist/
 frontend/coverage/
 frontend/.angular/
 frontend/.npm-cache/
+.gocache*/
