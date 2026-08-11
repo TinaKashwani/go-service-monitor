@@ -20,6 +20,9 @@ import (
 	"github.com/TinaKashwani/go-service-monitor/internal/handler"
 	"github.com/TinaKashwani/go-service-monitor/internal/metrics"
 	"github.com/TinaKashwani/go-service-monitor/internal/model"
+	"github.com/TinaKashwani/go-service-monitor/internal/repository"
+	"github.com/TinaKashwani/go-service-monitor/internal/security"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -61,9 +64,10 @@ func main() {
 	}
 
 	databaseURL := os.Getenv("DATABASE_URL")
-	var closeDatabase func()
+	var pool *pgxpool.Pool
 	if databaseURL != "" {
-		pool, databaseErr := database.Open(context.Background(), databaseURL, 10*time.Second)
+		var databaseErr error
+		pool, databaseErr = database.Open(context.Background(), databaseURL, 10*time.Second)
 		if databaseErr != nil {
 			log.Fatalf("Database startup failed: %v", databaseErr)
 		}
@@ -71,13 +75,12 @@ func main() {
 			pool.Close()
 			log.Fatalf("Database migration failed: %v", databaseErr)
 		}
-		closeDatabase = pool.Close
-		defer closeDatabase()
+		defer pool.Close()
 	}
 
 	server := newHTTPServer(
 		":"+port,
-		newHandler(envEnabled("ENABLE_AD_HOC_CHECKS"), services),
+		newHandlerWithDatabase(envEnabled("ENABLE_AD_HOC_CHECKS"), services, pool),
 	)
 
 	listener, err := net.Listen("tcp", server.Addr)
@@ -100,6 +103,10 @@ func main() {
 }
 
 func newHandler(enableAdHocChecks bool, services []model.Service) http.Handler {
+	return newHandlerWithDatabase(enableAdHocChecks, services, nil)
+}
+
+func newHandlerWithDatabase(enableAdHocChecks bool, services []model.Service, pool *pgxpool.Pool) http.Handler {
 	monitorMetrics := metrics.NewMonitorMetrics(prometheus.DefaultRegisterer)
 	monitorHandler := handler.NewMonitorHandlerWithMetrics(
 		serviceChecker,
@@ -113,6 +120,11 @@ func newHandler(enableAdHocChecks bool, services []model.Service) http.Handler {
 	mux.HandleFunc("/check", checkHandler(enableAdHocChecks))
 	mux.Handle("/metrics", getOnly(promhttp.Handler()))
 	mux.Handle("/api/v1/services/status", monitorHandler)
+	if pool != nil {
+		monitorAPI := handler.NewMonitorAPI(repository.NewPostgresMonitors(pool), repository.NewPostgresChecks(pool), security.NewURLValidator())
+		mux.Handle("/api/v1/monitors", monitorAPI)
+		mux.Handle("/api/v1/monitors/", monitorAPI)
+	}
 
 	return mux
 }
