@@ -92,6 +92,41 @@ The health endpoint returns `ok`, both frontend routes return the Angular
 application, and the API request is handled by the backend configured through
 `BACKEND_URL`.
 
+## Run the full stack with Docker Compose
+
+Docker Compose builds the production backend and frontend images, waits for the
+backend health check, and exposes only the frontend at
+`http://localhost:4200`. Nginx forwards same-origin `/api/` requests to the
+backend over the private Compose network.
+
+Start the stack and wait until both services are healthy:
+
+```bash
+docker compose up --build --wait
+```
+
+The default Compose configuration monitors the backend's own lightweight
+health endpoint. This makes local startup and verification deterministic and
+independent of public internet availability. To inspect the running stack:
+
+```bash
+docker compose ps
+docker compose logs
+curl http://localhost:4200/frontend-health
+curl http://localhost:4200/api/v1/services/status
+```
+
+Open `http://localhost:4200` in a browser. Stop the stack and remove its
+containers and network with:
+
+```bash
+docker compose down
+```
+
+There are no source mounts or development servers in the default Compose
+configuration. Re-run `docker compose up --build --wait` after changing source
+code.
+
 ## Configure monitored services
 
 Set `MONITORED_SERVICES` to a JSON array before startup to change the dashboard
