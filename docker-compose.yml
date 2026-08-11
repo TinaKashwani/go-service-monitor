@@ -60,5 +60,18 @@ services:
     init: true
     restart: "no"
 
+  demo-seed:
+    image: postgres:17-alpine
+    profiles: ["demo"]
+    environment:
+      PGPASSWORD: local-development-only
+    volumes:
+      - ./scripts/demo-seed.sql:/seed/demo-seed.sql:ro
+    command: ["psql", "-h", "database", "-U", "service_monitor", "-d", "service_monitor", "-v", "ON_ERROR_STOP=1", "-f", "/seed/demo-seed.sql"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: "no"
+
 volumes:
   postgres_data:

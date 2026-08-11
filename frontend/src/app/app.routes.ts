@@ -1,7 +1,10 @@
 import { Routes } from '@angular/router';
-import { PlaceholderComponent } from './pages/placeholder.component';
-import { OverviewComponent } from './pages/overview.component';
-import { MonitorsComponent } from './pages/monitors.component';
-import { MonitorDetailComponent } from './pages/monitor-detail.component';
-import { IncidentsComponent } from './pages/incidents.component';
-export const routes:Routes=[{path:'overview',component:OverviewComponent},{path:'monitors',component:MonitorsComponent},{path:'monitors/:id',component:MonitorDetailComponent},{path:'incidents',component:IncidentsComponent},{path:'about',component:PlaceholderComponent},{path:'',pathMatch:'full',redirectTo:'overview'},{path:'**',redirectTo:'overview'}];
+export const routes:Routes=[
+  {path:'overview',loadComponent:()=>import('./pages/overview.component').then(m=>m.OverviewComponent)},
+  {path:'monitors',loadComponent:()=>import('./pages/monitors.component').then(m=>m.MonitorsComponent)},
+  {path:'monitors/:id',loadComponent:()=>import('./pages/monitor-detail.component').then(m=>m.MonitorDetailComponent)},
+  {path:'incidents',loadComponent:()=>import('./pages/incidents.component').then(m=>m.IncidentsComponent)},
+  {path:'about',loadComponent:()=>import('./pages/about.component').then(m=>m.AboutComponent)},
+  {path:'',pathMatch:'full',redirectTo:'overview'},
+  {path:'**',redirectTo:'overview'}
+];
