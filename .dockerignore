@@ -16,5 +16,12 @@ coverage.html
 bin
 dist
 tmp
+.gocache*
+frontend/node_modules
+frontend/dist
+frontend/coverage
+frontend/.angular
+frontend/playwright-report
+frontend/test-results
 
 README.md
