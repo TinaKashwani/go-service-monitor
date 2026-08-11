@@ -1,0 +1,6 @@
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { Observable } from 'rxjs';
+import { HistorySeries, Incident, Monitor, OverviewSummary } from '../models/observability.models';
+export type MonitorInput=Omit<Monitor,'id'|'created_at'|'updated_at'>;
+@Injectable({providedIn:'root'})export class MonitorApiService{private readonly http=inject(HttpClient);private readonly base='/api/v1';list():Observable<Monitor[]>{return this.http.get<Monitor[]>(`${this.base}/monitors`)}get(id:string){return this.http.get<Monitor>(`${this.base}/monitors/${id}`)}create(value:MonitorInput){return this.http.post<Monitor>(`${this.base}/monitors`,value)}update(id:string,value:MonitorInput){return this.http.patch<Monitor>(`${this.base}/monitors/${id}`,value)}delete(id:string){return this.http.delete<void>(`${this.base}/monitors/${id}`)}check(id:string){return this.http.post(`${this.base}/monitors/${id}/check`,{})}overview(range:string){return this.http.get<OverviewSummary>(`${this.base}/overview`,{params:new HttpParams().set('range',range)})}history(id:string,range:string){return this.http.get<HistorySeries>(`${this.base}/monitors/${id}/history`,{params:{range}})}incidents(state:string){return this.http.get<{items:Incident[]}>(`${this.base}/incidents`,{params:{state}})}}
