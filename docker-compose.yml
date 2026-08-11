@@ -1,11 +1,15 @@
+name: go-service-monitor
+
 services:
   backend:
     build:
       context: .
       dockerfile: Dockerfile
     environment:
+      PORT: "8080"
       ENABLE_AD_HOC_CHECKS: "false"
-      MONITORED_SERVICES: '[{"name":"Backend","url":"http://backend:8080/health"},{"name":"Unavailable","url":"http://127.0.0.1:59999/health"}]'
+      MONITORED_SERVICES: >-
+        [{"name":"Backend","url":"http://backend:8080/health"},{"name":"Unavailable","url":"http://127.0.0.1:59999/health"}]
     expose:
       - "8080"
     healthcheck:
@@ -14,6 +18,7 @@ services:
       timeout: 3s
       retries: 12
       start_period: 5s
+      init: true
     restart: "no"
 
   frontend:
@@ -33,4 +38,5 @@ services:
       timeout: 3s
       retries: 12
       start_period: 5s
+    init: true
     restart: "no"
