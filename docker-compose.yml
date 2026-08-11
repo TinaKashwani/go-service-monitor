@@ -1,0 +1,38 @@
+name: go-service-monitor
+
+services:
+  backend:
+    build:
+      context: .
+    environment:
+      PORT: "8080"
+      ENABLE_AD_HOC_CHECKS: "false"
+      MONITORED_SERVICES: >-
+        [{"name":"Local backend","url":"http://backend:8080/health"}]
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    init: true
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      BACKEND_URL: http://backend:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "4200:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/frontend-health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    init: true

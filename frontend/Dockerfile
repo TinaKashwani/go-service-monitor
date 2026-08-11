@@ -21,7 +21,8 @@ COPY --chown=101:101 nginx/default.conf.template /etc/nginx/templates/default.co
 COPY --chown=101:101 docker-entrypoint.sh /usr/local/bin/frontend-entrypoint
 
 USER root
-RUN chmod 0555 /usr/local/bin/frontend-entrypoint \
+RUN sed -i 's/\r$//' /usr/local/bin/frontend-entrypoint \
+    && chmod 0555 /usr/local/bin/frontend-entrypoint \
     && rm -f /etc/nginx/conf.d/default.conf \
     && ln -s /tmp/frontend-default.conf /etc/nginx/conf.d/default.conf
 USER 101
