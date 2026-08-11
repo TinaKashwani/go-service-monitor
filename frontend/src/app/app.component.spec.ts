@@ -152,9 +152,13 @@ describe('AppComponent', () => {
     getRefreshButton().click();
     fixture.detectChanges();
 
-    expect(getByTestId('loading-state')).not.toBeNull();
+    expect(getByTestId('refreshing-state')).not.toBeNull();
+    expect(getRefreshButton().disabled).toBeTrue();
+    const refreshRequest = httpTestingController.expectOne('/api/v1/services/status');
+    getRefreshButton().click();
+    httpTestingController.expectNone('/api/v1/services/status');
 
-    httpTestingController.expectOne('/api/v1/services/status').flush([
+    refreshRequest.flush([
       {
         url: 'https://updated.example.com',
         status: 'down',
@@ -171,6 +175,59 @@ describe('AppComponent', () => {
     expect(getTextContent()).not.toContain('https://initial.example.com');
     expect(getTextContent()).toContain('87 ms');
     expect(getTextContent()).toContain('timeout');
+    expect(getRefreshButton().disabled).toBeFalse();
+  });
+
+  it('keeps existing results and offers retry when a refresh fails', () => {
+    fixture.detectChanges();
+    httpTestingController.expectOne('/api/v1/services/status').flush([{
+      url: 'https://retained.example.com', status: 'up', status_code: 200,
+      response_time: 1, response_time_ms: 1, checked_at: '2026-01-15T12:30:00Z'
+    }] satisfies CheckResult[]);
+    fixture.detectChanges();
+
+    getRefreshButton().click();
+    httpTestingController.expectOne('/api/v1/services/status').flush({}, { status: 503, statusText: 'Unavailable' });
+    fixture.detectChanges();
+
+    expect(getByTestId('refresh-error')).not.toBeNull();
+    expect(getTextContent()).toContain('https://retained.example.com');
+    expect(getTextContent()).toContain('previous results are still shown');
+  });
+
+  it('renders missing metrics as N/A and exposes accessible controls and status', () => {
+    fixture.detectChanges();
+    httpTestingController.expectOne('/api/v1/services/status').flush([{
+      url: 'https://missing.example.com', status: 'down'
+    }] satisfies CheckResult[]);
+    fixture.detectChanges();
+
+    expect(getTextContent().match(/N\/A/g)?.length).toBe(3);
+    expect(getRefreshButton().getAttribute('aria-label')).toBe('Refresh service statuses');
+    expect(getByTestId('live-status')?.getAttribute('aria-live')).toBe('polite');
+    expect(getTextContent()).toContain('Status: Down');
+  });
+
+  it('uses the newest check time and updates it with refreshed summary data', () => {
+    fixture.detectChanges();
+    httpTestingController.expectOne('/api/v1/services/status').flush([
+      { url: 'https://older.example.com', status: 'up', checked_at: '2026-01-15T12:20:00Z' },
+      { url: 'https://newer.example.com', status: 'down', checked_at: '2026-01-15T12:30:00Z' }
+    ] satisfies CheckResult[]);
+    fixture.detectChanges();
+
+    expect(getByTestId('last-refreshed')?.textContent).toContain(datePipe.transform('2026-01-15T12:30:00Z', 'medium') ?? '');
+    expect(getByTestId('services-count')?.textContent).toContain('2');
+
+    getRefreshButton().click();
+    httpTestingController.expectOne('/api/v1/services/status').flush([
+      { url: 'https://latest.example.com', status: 'up', checked_at: '2026-01-15T12:45:00Z' }
+    ] satisfies CheckResult[]);
+    fixture.detectChanges();
+
+    expect(getByTestId('last-refreshed')?.textContent).toContain(datePipe.transform('2026-01-15T12:45:00Z', 'medium') ?? '');
+    expect(getByTestId('services-count')?.textContent).toContain('1');
+    expect(getByTestId('healthy-count')?.textContent).toContain('1');
   });
 
   function getRefreshButton(): HTMLButtonElement {
