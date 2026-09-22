@@ -41,7 +41,7 @@ type MonitorSummary struct {
 	AverageLatencyMS float64        `json:"average_latency_ms"`
 	P95LatencyMS     float64        `json:"p95_latency_ms"`
 	CheckCount       int64          `json:"check_count"`
-	Points           []HistoryPoint `json:"points,omitempty"`
+	Points           []HistoryPoint `json:"points"`
 }
 type Overview struct {
 	Range            string           `json:"range"`
