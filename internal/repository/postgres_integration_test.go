@@ -120,3 +120,57 @@ func TestPostgresRepositoryIntegration(t *testing.T) {
 		t.Fatalf("retention left %d checks, want 4: %v", remaining, err)
 	}
 }
+
+func TestClaimDueLocksOnlyReturnedMonitors(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	pool, err := database.Open(ctx, databaseURL, 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	if err := database.Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := NewPostgresMonitors(pool)
+	created := make([]model.Monitor, 0, 3)
+	for index := 0; index < 3; index++ {
+		name := fmt.Sprintf("claim-limit-%d-%d", time.Now().UnixNano(), index)
+		monitor, err := repo.Create(ctx, model.Monitor{
+			Name: name, URL: "https://example.com/" + name, IntervalSeconds: 60,
+			TimeoutSeconds: 5, ExpectedStatus: 200, Enabled: true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		created = append(created, monitor)
+	}
+	t.Cleanup(func() {
+		for _, monitor := range created {
+			_ = repo.Delete(ctx, monitor.ID)
+		}
+	})
+
+	conn, claimed, err := repo.ClaimDue(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(claimed) != 1 {
+		conn.Release()
+		t.Fatalf("claimed %d monitors, want 1", len(claimed))
+	}
+	defer repo.ReleaseClaims(context.Background(), conn, claimed)
+
+	var held int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_locks
+		WHERE locktype='advisory' AND pid=pg_backend_pid() AND granted`).Scan(&held); err != nil {
+		t.Fatal(err)
+	}
+	if held != len(claimed) {
+		t.Fatalf("session holds %d advisory locks for %d claimed monitors", held, len(claimed))
+	}
+}

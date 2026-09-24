@@ -85,13 +85,21 @@ func (r *PostgresMonitors) ClaimDue(ctx context.Context, limit int) (*pgxpool.Co
 	if err != nil {
 		return nil, nil, err
 	}
-	rows, err := conn.Query(ctx, `SELECT `+monitorColumns+` FROM monitors m
+	rows, err := conn.Query(ctx, `WITH due AS MATERIALIZED (
+		SELECT m.*, COALESCE((
+			SELECT max(c.checked_at) FROM check_results c WHERE c.monitor_id=m.id
+		), m.created_at) AS due_order
+		FROM monitors m
 		WHERE enabled AND NOT EXISTS (
 			SELECT 1 FROM check_results c WHERE c.monitor_id=m.id
 			AND c.source='scheduled' AND c.checked_at > now()-(m.interval_seconds * interval '1 second')
-		) AND pg_try_advisory_lock(hashtextextended(m.id::text, 0))
-		ORDER BY COALESCE((SELECT max(c.checked_at) FROM check_results c WHERE c.monitor_id=m.id), m.created_at)
-		LIMIT $1`, limit)
+		)
+		ORDER BY due_order, m.id
+		LIMIT $1
+	)
+	SELECT `+monitorColumns+` FROM due m
+	WHERE pg_try_advisory_lock(hashtextextended(m.id::text, 0))
+	ORDER BY due_order, m.id`, limit)
 	if err != nil {
 		conn.Release()
 		return nil, nil, err
