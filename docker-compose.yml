@@ -1,6 +1,21 @@
 name: go-service-monitor
 
 services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: service_monitor
+      POSTGRES_USER: service_monitor
+      POSTGRES_PASSWORD: local-development-only
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U service_monitor -d service_monitor"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: "no"
+
   backend:
     build:
       context: .
@@ -8,10 +23,14 @@ services:
     environment:
       PORT: "8080"
       ENABLE_AD_HOC_CHECKS: "false"
+      DATABASE_URL: postgres://service_monitor:local-development-only@database:5432/service_monitor?sslmode=disable
       MONITORED_SERVICES: >-
         [{"name":"Backend","url":"http://backend:8080/health"},{"name":"Unavailable","url":"http://127.0.0.1:59999/health"}]
     expose:
       - "8080"
+    depends_on:
+      database:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 5s
@@ -40,3 +59,19 @@ services:
       start_period: 5s
     init: true
     restart: "no"
+
+  demo-seed:
+    image: postgres:17-alpine
+    profiles: ["demo"]
+    environment:
+      PGPASSWORD: local-development-only
+    volumes:
+      - ./scripts/demo-seed.sql:/seed/demo-seed.sql:ro
+    command: ["psql", "-h", "database", "-U", "service_monitor", "-d", "service_monitor", "-v", "ON_ERROR_STOP=1", "-f", "/seed/demo-seed.sql"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  postgres_data:

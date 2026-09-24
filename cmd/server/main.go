@@ -16,9 +16,14 @@ import (
 	"time"
 
 	"github.com/TinaKashwani/go-service-monitor/internal/checker"
+	"github.com/TinaKashwani/go-service-monitor/internal/database"
 	"github.com/TinaKashwani/go-service-monitor/internal/handler"
 	"github.com/TinaKashwani/go-service-monitor/internal/metrics"
 	"github.com/TinaKashwani/go-service-monitor/internal/model"
+	"github.com/TinaKashwani/go-service-monitor/internal/repository"
+	"github.com/TinaKashwani/go-service-monitor/internal/scheduler"
+	"github.com/TinaKashwani/go-service-monitor/internal/security"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -59,9 +64,24 @@ func main() {
 		log.Fatalf("Invalid MONITORED_SERVICES configuration: %v", err)
 	}
 
+	databaseURL := os.Getenv("DATABASE_URL")
+	var pool *pgxpool.Pool
+	if databaseURL != "" {
+		var databaseErr error
+		pool, databaseErr = database.Open(context.Background(), databaseURL, 10*time.Second)
+		if databaseErr != nil {
+			log.Fatalf("Database startup failed: %v", databaseErr)
+		}
+		if databaseErr = database.Migrate(context.Background(), pool); databaseErr != nil {
+			pool.Close()
+			log.Fatalf("Database migration failed: %v", databaseErr)
+		}
+		defer pool.Close()
+	}
+
 	server := newHTTPServer(
 		":"+port,
-		newHandler(envEnabled("ENABLE_AD_HOC_CHECKS"), services),
+		newHandlerWithDatabase(envEnabled("ENABLE_AD_HOC_CHECKS"), services, pool),
 	)
 
 	listener, err := net.Listen("tcp", server.Addr)
@@ -75,6 +95,12 @@ func main() {
 		syscall.SIGTERM,
 	)
 	defer stop()
+	if pool != nil {
+		validator := security.NewURLValidator()
+		backgroundScheduler := scheduler.New(repository.NewPostgresMonitors(pool), repository.NewPostgresChecks(pool), security.NewSafeChecker(validator, 10), 10, 5*time.Second, log.Default())
+		go backgroundScheduler.Run(ctx)
+		go scheduler.RunRetention(ctx, repository.NewPostgresChecks(pool), 30*24*time.Hour, log.Default())
+	}
 
 	log.Printf("Server starting on port %s", port)
 
@@ -84,6 +110,10 @@ func main() {
 }
 
 func newHandler(enableAdHocChecks bool, services []model.Service) http.Handler {
+	return newHandlerWithDatabase(enableAdHocChecks, services, nil)
+}
+
+func newHandlerWithDatabase(enableAdHocChecks bool, services []model.Service, pool *pgxpool.Pool) http.Handler {
 	monitorMetrics := metrics.NewMonitorMetrics(prometheus.DefaultRegisterer)
 	monitorHandler := handler.NewMonitorHandlerWithMetrics(
 		serviceChecker,
@@ -97,6 +127,15 @@ func newHandler(enableAdHocChecks bool, services []model.Service) http.Handler {
 	mux.HandleFunc("/check", checkHandler(enableAdHocChecks))
 	mux.Handle("/metrics", getOnly(promhttp.Handler()))
 	mux.Handle("/api/v1/services/status", monitorHandler)
+	if pool != nil {
+		monitorAPI := handler.NewMonitorAPI(repository.NewPostgresMonitors(pool), repository.NewPostgresChecks(pool), security.NewURLValidator())
+		historyAPI := handler.NewHistoryAPI(repository.NewPostgresHistory(pool))
+		monitorAPI.SetHistory(historyAPI)
+		mux.Handle("/api/v1/monitors", monitorAPI)
+		mux.Handle("/api/v1/monitors/", monitorAPI)
+		mux.HandleFunc("/api/v1/overview", historyAPI.Overview)
+		mux.HandleFunc("/api/v1/incidents", historyAPI.Incidents)
+	}
 
 	return mux
 }

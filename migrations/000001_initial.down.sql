@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS incidents;
+DROP TABLE IF EXISTS check_results;
+DROP TABLE IF EXISTS monitors;
